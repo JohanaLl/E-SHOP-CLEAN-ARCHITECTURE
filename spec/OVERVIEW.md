@@ -16,9 +16,7 @@ cliente arma una orden con varios productos, el sistema verifica que el cliente 
 los productos existan y estén disponibles, reserva el stock, calcula el total y deja la orden
 registrada."*
 
-El objetivo de negocio es secundario; el objetivo real es **pedagógico**: usar ese flujo,
-aparentemente simple, para resolver los problemas centrales de una arquitectura de microservicios
-hexagonal — modelar dominio rico con puertos/adaptadores, decidir cuándo un servicio debe llamar a
+El objetivo de negocio es usar el flujo de la arquitectura hexagonal para, resolver los problemas centrales de una arquitectura de microservicios hexagonal — modelar dominio, puertos/adaptadores, decidir cuándo un servicio debe llamar a
 otro, mantener el desacoplamiento aunque los servicios se necesiten entre sí, y manejar el fallo de
 una dependencia a mitad de una operación.
 
@@ -106,29 +104,17 @@ entre microservicios.
 
 Cuatro servicios, cada uno con su propia base de datos PostgreSQL (nunca comparten tablas):
 
-```
-        ┌──────────────────── Cliente / operadores (HTTP) ────────────────────┐
-        │                    │                     │                        │
-        ▼                    ▼                     ▼                        ▼
- ┌─────────────┐       ┌─────────────┐        ┌─────────────┐          ┌──────────────────┐
- │ customer-   │       │ product-    │        │ inventory-  │          │  order-service   │
- │ service     │       │ service     │        │ service     │          │  (coordinador)   │
- └──────┬──────┘       └──────┬──────┘        └──────┬──────┘          └────────┬─────────┘
-        │ db                  │ db                    │ db                       │ db
-        ▼                     ▼                       ▼                         ▼
-   customers_db          products_db            inventory_db              orders_db
+![Arquitectura general del sistema](./images/01-arquitectura-general.png)
 
-   order-service, y SOLO order-service, llama por REST a los otros tres:
-       GET  /api/customers/{id}        (¿el cliente existe y está activo?)
-       GET  /api/products?ids=...      (¿los productos existen, activos, a qué precio?)
-       POST /api/inventory/...         (consultar/reservar/liberar/descontar stock)
-```
+`order-service`, y solo `order-service`, llama por REST a los otros tres: `GET
+/api/customers/{id}` (¿el cliente existe y está activo?), `GET /api/products?ids=...` (¿los
+productos existen, activos, a qué precio?), `POST /api/inventory/...` (consultar/reservar/liberar/
+descontar stock).
 
-> **Diagramas pendientes:** este bloque en texto se reemplazará/complementará con las imágenes de
-> arquitectura que se entreguen (diagrama lógico, diagrama de secuencia de "crear orden"), insertadas
-> en `README.md` con rutas relativas (`./images/...`). También se sugiere, como mejora futura, un
-> diagrama específico del grafo de dependencias (DAG) — no se genera todavía porque no fue
-> solicitado ni entregado como imagen.
+> **Diagrama sugerido pendiente:** un DAG dedicado solo al grafo de dependencias (sin el detalle
+> de responsabilidades de cada caja) podría ser útil como referencia rápida separada. No se genera
+> todavía porque no fue solicitado ni entregado como imagen — el diagrama de arquitectura general
+> de arriba ya cubre la misma información.
 
 ---
 
@@ -279,6 +265,8 @@ roadmap), pero el diseño queda preparado para ellos.
 
 ### 3.10 Mapa de todas las comunicaciones
 
+![Comunicación entre microservicios (REST síncrono)](./images/03-comunicacion-microservicios.png)
+
 ```
 CREAR ORDEN
   order-service → customer-service   GET  /api/customers/{id}                (validar cliente activo)
@@ -308,7 +296,48 @@ stock.
 | → inventory-service (release) | reserva ya liberada (OK idempotente) | — | sí | 503, orden sigue PENDING | No cambia estado |
 | → inventory-service (decrease) | — | — | sí | 503, orden sigue PENDING | No cambia estado |
 
-### 3.12 Resumen de decisiones de arquitectura
+### 3.12 Diagramas de secuencia por operación
+
+El detalle completo de payloads, códigos HTTP y casos de uso de cada operación se especificará en
+`spec/order-service/REQUIREMENT.md`. Estos tres diagramas ya fijan el contrato de comportamiento
+esperado:
+
+**Crear orden** — el flujo estrella: valida (solo lectura) antes de escribir; la única escritura
+remota (`reserve`) tiene compensación.
+
+![Secuencia — Crear orden](./images/04-secuencia-crear-orden.png)
+
+**Confirmar orden** — el efecto en `inventory-service` (`decrease`) ocurre antes de cambiar el
+estado de la orden a `CONFIRMED`, nunca al revés.
+
+![Secuencia — Confirmar orden](./images/05-secuencia-confirmar-orden.png)
+
+**Cancelar orden** — misma disciplina: liberar el stock antes de marcar `CANCELLED`. Una orden ya
+`CONFIRMED` no se puede cancelar (409).
+
+![Secuencia — Cancelar orden](./images/06-secuencia-cancelar-orden.png)
+
+### 3.13 Ciclo de vida de la orden (máquina de estados)
+
+Las transiciones válidas son una invariante del agregado `Order` (viven en sus métodos
+`confirm()`/`cancel()`/`markFailed()`, no en el caso de uso): solo `PENDING → CONFIRMED`,
+`PENDING → CANCELLED` y `PENDING → FAILED`. Cualquier otra transición (confirmar una `CANCELLED`,
+cancelar una `CONFIRMED`) lanza `InvalidOrderStateException`.
+
+![Máquina de estados de la Orden](./images/07-maquina-estados-orden.png)
+
+### 3.14 Modelo de datos global
+
+Vista de conjunto de las cinco tablas principales repartidas en las 4 bases de datos. Línea sólida
+= FK real (misma base de datos, mismo agregado); línea punteada = referencia por id entre
+servicios, sin FK — así es exactamente donde termina cada bounded context.
+
+![Modelo de datos — una base por servicio](./images/08-modelo-datos.png)
+
+El detalle columna por columna (tipos SQL, índices, restricciones `CHECK`) se especifica por
+servicio en su `spec/<servicio>/REQUIREMENT.md`.
+
+### 3.15 Resumen de decisiones de arquitectura
 
 | Decisión | Elección | Motivo |
 |----------|----------|--------|
@@ -340,6 +369,8 @@ tres anillos concéntricos:
     implementada por fuera.
 - **Adaptadores / Infraestructura (borde):** conexiones con el mundo real. El controlador REST es
   un adaptador de entrada; el repositorio JPA, uno de salida. Aquí vive Spring, JPA, Feign.
+
+![Arquitectura Hexagonal de un microservicio](./images/02-arquitectura-hexagonal.png)
 
 **Regla de dependencia (lo único que hay que memorizar):** las dependencias apuntan **hacia
 adentro**. El borde conoce al centro; el centro nunca conoce al borde. Un caso de uso depende de
@@ -434,6 +465,8 @@ una `FeignException`.
 La regla del roadmap: **cada fase se termina y se ejecuta completa antes de empezar la
 siguiente.** Terminar una fase significa: compila, corre en Docker, tiene sus pruebas verdes y fue
 probada con Postman/curl.
+
+![Roadmap de desarrollo — MVPs](./images/09-roadmap-mvps.png)
 
 ```
 Fase 0  Preparación
@@ -540,6 +573,9 @@ regla de oro antes de añadir algo:
 | D-2 | Nombre de módulos | Singular + `-service` (`customer-service`, `product-service`, `inventory-service`, `order-service`) | Coincide con el módulo físico ya existente; confirmado por el usuario |
 | D-3 | Paquete raíz Java | `com.shop.<servicio>.service` (no `com.ecommerce.<servicio>` como decía la documentación original) | Deriva de D-2 y del código ya existente |
 | D-4 | Nombres de bounded context vs. módulo técnico | Se mantiene el lenguaje de dominio en plural (Customers, Products, Inventory, Orders) para la documentación de negocio, distinto del nombre técnico del módulo | Evita confundir "cómo se llama el concepto de negocio" con "cómo se llama la carpeta/paquete" |
+| D-5 | Formato de paginación | Sobre propio `{ content, page, size, totalElements, totalPages }`, no el `Pageable`/`Page` de Spring serializado tal cual | Resuelto en `customer-service/REQUIREMENT.md`; aplica a todos los servicios por consistencia |
+| D-6 | Generación de `UUID` | Se genera en el dominio/aplicación, no delegada a la base de datos (`@GeneratedValue`/`DEFAULT`) | Coherente con que el dominio no dependa de JPA; resuelto en `customer-service/REQUIREMENT.md` |
+| D-7 | Formato de timestamps | ISO-8601 en UTC (`"...Z"`) sobre columnas `TIMESTAMPTZ` | Resuelto en `customer-service/REQUIREMENT.md`; aplica a todos los servicios |
 
 ## 9. Mejoras sugeridas (pendientes de aprobación, no aplicadas)
 
@@ -571,9 +607,13 @@ original entregado:
 
 ## 11. Decisiones pendientes (a resolver cuando se especifique cada servicio)
 
-- Formato exacto de paginación (campos `page`/`size` vs. `Pageable` de Spring expuesto tal cual).
-- Estrategia de generación de `UUID` (aplicación vs. base de datos).
-- Zona horaria / formato exacto de timestamps en las respuestas JSON (se asume `TIMESTAMPTZ` +
-  ISO-8601, a confirmar por servicio).
+- Shape exacto del cuerpo de error HTTP (ver mejora sugerida en `§9`, RFC 7807 aún no aprobado).
+- Tamaño de página por defecto y máximo permitido en los listados paginados de `product-service`,
+  `inventory-service` y `order-service` (para `customer-service` ya está resuelto: default `20`,
+  máximo `100` — ver `customer-service/REQUIREMENT.md §13`; se recomienda replicar estos mismos
+  valores por consistencia salvo que un servicio tenga una razón concreta para diferir).
 - Si `inventory-service` expone `restock`/`adjust` sin autenticación en esta fase (heredado del
   punto 1.3: sí, por ahora, igual que el resto de endpoints).
+
+> Resueltas: formato de paginación, generación de `UUID` y formato de timestamps — ver D-5, D-6,
+> D-7 en `§8`.

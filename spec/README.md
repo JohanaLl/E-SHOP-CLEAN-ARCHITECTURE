@@ -65,27 +65,15 @@ observabilidad (Prometheus/Grafana), Circuit Breaker/Resilience4j, Kubernetes, S
 - **Topología:** tres servicios de dominio autónomos (`customer-service`, `product-service`,
   `inventory-service`, sin dependencias salientes) y un servicio **coordinador**
   (`order-service`) que compone una operación de negocio llamando a los otros tres.
-- **Grafo de dependencias — DAG, dirigido y acíclico:**
+- **Grafo de dependencias — DAG, dirigido y acíclico.** Solo `order-service` inicia llamadas
+  entre servicios. Los demás nunca se llaman entre sí ni llaman a `order-service`. Sin
+  infraestructura de plataforma todavía (sin gateway/discovery/config): las URLs se configuran a
+  mano en `application.yml`. Docker Compose levanta los 4 servicios + 4 instancias de PostgreSQL.
 
-  ```
-                      ─────────────► customer-service   (valida cliente activo)
-                      │
-   order-service ─────┼────────────► product-service    (valida productos + obtiene precios)
-   (coordinador)      │
-                      └────────────► inventory-service  (consulta / reserva / libera / descuenta stock)
+![Arquitectura general del sistema](./images/01-arquitectura-general.png)
 
-   customer-service, product-service, inventory-service  ───► (no dependen de nadie)
-  ```
-
-  Solo `order-service` inicia llamadas entre servicios. Los demás nunca se llaman entre sí ni
-  llaman a `order-service`. Sin infraestructura de plataforma todavía (sin gateway/discovery/
-  config): las URLs se configuran a mano en `application.yml`. Docker Compose levanta los 4
-  servicios + 4 instancias de PostgreSQL.
-
-> **Diagramas pendientes:** cuando se entreguen imágenes de arquitectura (diagrama lógico,
-> diagrama de secuencia de "crear orden", DAG de dependencias), se insertarán aquí con rutas
-> relativas, p. ej. `![Arquitectura](./images/architecture.png)`. Por ahora el grafo anterior es
-> una representación en texto equivalente.
+Detalle de cómo se organiza internamente cada servicio (dominio, puertos, adaptadores) en
+[`OVERVIEW.md § Principios de Arquitectura Hexagonal`](./OVERVIEW.md#4-principios-de-arquitectura-hexagonal).
 
 ## Microservicios
 
@@ -109,6 +97,8 @@ Detalle completo (entidades, casos de uso, endpoints, persistencia, pruebas) viv
 `REQUIREMENT.md` y `CHECKLIST.md` de cada servicio a medida que se especifiquen.
 
 ## Flujo principal del negocio: crear una orden
+
+![Secuencia — Crear orden](./images/04-secuencia-crear-orden.png)
 
 ```
 1. order-service recibe POST /api/orders { customerId, items[] }.
@@ -139,6 +129,8 @@ Cada fase se termina y se prueba completa antes de iniciar la siguiente:
 | 4 | `order-service` (coordinador) | Necesita a los tres anteriores vivos; integra todo lo aprendido |
 | 5 | Docker Compose con el sistema completo + prueba de humo E2E | Cierre de la primera versión |
 | 6+ | Extensiones opcionales: Payments, Auth, Audit, Reports, Gateway, eventos… | Solo cuando lo anterior esté sólido |
+
+![Roadmap de desarrollo — MVPs](./images/09-roadmap-mvps.png)
 
 Roadmap completo, con checklist de "fase terminada", en [`OVERVIEW.md`](./OVERVIEW.md).
 
@@ -207,7 +199,8 @@ carpeta bajo `spec/` (p. ej. `spec/payment-service/` cuando se aborde el roadmap
 
 - [`OVERVIEW.md`](./OVERVIEW.md) — visión global, arquitectura completa, comunicación entre
   microservicios, principios hexagonales, estrategia de pruebas y roadmap detallado.
-- `customer-service/REQUIREMENT.md` y `CHECKLIST.md` — *(pendiente de especificar)*.
+- [`customer-service/REQUIREMENT.md`](./customer-service/REQUIREMENT.md) y
+  [`CHECKLIST.md`](./customer-service/CHECKLIST.md) — especificación completa, lista para Fase 1.
 - `product-service/REQUIREMENT.md` y `CHECKLIST.md` — *(pendiente de especificar)*.
 - `inventory-service/REQUIREMENT.md` y `CHECKLIST.md` — *(pendiente de especificar)*.
 - `order-service/REQUIREMENT.md` y `CHECKLIST.md` — *(pendiente de especificar)*.
