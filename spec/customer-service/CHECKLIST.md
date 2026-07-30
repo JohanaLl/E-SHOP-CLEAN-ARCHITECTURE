@@ -6,17 +6,18 @@
 
 ## 1. Dominio (sin Spring, sin JPA)
 
-- [ ] Crear value object `Email` con factory `Email.of(rawValue)` (trim + minúsculas + validación
-      de formato) — ver `REQUIREMENT.md §6.3`
-- [ ] Crear enum `CustomerStatus` (`ACTIVE`, `INACTIVE`) — ver `§6.2`
-- [ ] Crear enum `DocumentType` (`CC`, `NIT`, `CE`, `PASSPORT`) — ver `§6.2`
-- [ ] Crear excepciones de dominio: `InvalidEmailException`, `CustomerNotFoundException`,
+- [x] Crear value object `Email` (record, trim + minúsculas + validación de formato en el
+      constructor compacto) — ver `REQUIREMENT.md §6.3`
+- [x] Crear enum `CustomerStatus` (`ACTIVE`, `INACTIVE`) — ver `§6.2`
+- [x] Crear enum `DocumentType` (`CC`, `NIT`, `CE`, `PASSPORT`) — ver `§6.2`
+- [x] Crear excepciones de dominio: `InvalidEmailException`, `CustomerNotFoundException`,
       `DuplicateEmailException`, `DuplicateDocumentException` — ver `§6.4`
-- [ ] Crear agregado `Customer` con dos factory methods: `create(...)` (nace `ACTIVE`, genera
+- [x] Crear agregado `Customer` con dos factory methods: `create(...)` (nace `ACTIVE`, genera
       `id`/timestamps) y `reconstruct(...)` (usado solo por el mapper de persistencia) — ver `§6.1`
-- [ ] Implementar métodos de dominio: `activate()`, `deactivate()`, `updateContact(...)` —
-      `activate()`/`deactivate()` deben ser no-op (sin cambiar `updatedAt`) si el cliente ya está en
-      el estado pedido
+- [x] Implementar métodos de dominio: `activate()`, `deactivate()`, `updateContact(...)`. Nota: la
+      idempotencia "sin `save` de más" para `activate()`/`deactivate()` es responsabilidad del
+      futuro `ChangeCustomerStatusUseCaseImpl` (§6.2), no del método de dominio en sí — eso sigue
+      pendiente en la sección 3.
 - [ ] Pruebas unitarias de `Customer` — implementar los 16 casos de `REQUIREMENT.md §15.1`
       (invariantes de longitud, `create()` vs `reconstruct()`, idempotencia de
       `activate()`/`deactivate()` sin cambio de `updatedAt`, inmutabilidad de `id`/`createdAt`)
