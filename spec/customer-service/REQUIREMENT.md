@@ -520,9 +520,13 @@ para escribirse directamente como un método `@Test`.
 9. `reconstruct()` con `status=INACTIVE` histórico → respeta ese estado (a diferencia de
    `create()`, que siempre nace `ACTIVE`).
 10. `activate()` sobre un cliente `INACTIVE` → pasa a `ACTIVE`, `updatedAt` se actualiza.
-11. `activate()` sobre uno ya `ACTIVE` → permanece `ACTIVE`; `updatedAt` **no** cambia (no-op).
+11. `activate()` sobre uno ya `ACTIVE` → no lanza excepción, permanece `ACTIVE`. **No** se verifica
+    aquí que `updatedAt` quede sin cambios — `activate()` siempre recalcula `Instant.now()` (por
+    diseño, ver `§6.2`); el "no-op real" (sin persistir de más) es responsabilidad del futuro
+    `ChangeCustomerStatusUseCaseImpl` y se prueba en `§15.2` #26, no a este nivel.
 12. `deactivate()` sobre un cliente `ACTIVE` → pasa a `INACTIVE`, `updatedAt` se actualiza.
-13. `deactivate()` sobre uno ya `INACTIVE` → permanece `INACTIVE`; `updatedAt` **no** cambia.
+13. `deactivate()` sobre uno ya `INACTIVE` → no lanza excepción, permanece `INACTIVE`. Mismo matiz
+    que el ítem #11: no se verifica `updatedAt` aquí, esa garantía se prueba en `§15.2` #24.
 14. `updateContact(fullName, phone, address, email)` cambia esos campos y actualiza `updatedAt`,
     sin tocar `status`, `id` ni `createdAt`.
 15. `updateContact` con un nuevo `Email` reemplaza el VO completo (no lo muta).

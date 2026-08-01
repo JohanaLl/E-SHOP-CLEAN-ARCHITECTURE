@@ -18,13 +18,15 @@
       idempotencia "sin `save` de más" para `activate()`/`deactivate()` es responsabilidad del
       futuro `ChangeCustomerStatusUseCaseImpl` (§6.2), no del método de dominio en sí — eso sigue
       pendiente en la sección 3.
-- [ ] Pruebas unitarias de `Customer` — implementar los 16 casos de `REQUIREMENT.md §15.1`
-      (invariantes de longitud, `create()` vs `reconstruct()`, idempotencia de
-      `activate()`/`deactivate()` sin cambio de `updatedAt`, inmutabilidad de `id`/`createdAt`)
-- [ ] Pruebas unitarias de `Email` — implementar los 8 casos de `§15.1` (normalización,
-      igualdad por valor, formatos inválidos: sin `@`, sin parte local, sin dominio, vacío/null)
-- [ ] Pruebas unitarias de enums — `DocumentType.values()` y `CustomerStatus.values()` exactos
-      (`§15.1` #25-26)
+- [x] Pruebas unitarias de `Customer` (`CustomerTest`, 22 tests) — cubren `§15.1` #1-15
+      (`create()`, `reconstruct()`, `activate()`/`deactivate()` con y sin cambio real de estado,
+      `updateContact()`). El #16 ("sin setters públicos para `id`/`createdAt`") no se traduce en
+      un test de runtime — es una garantía estructural verificada por revisión de código, no algo
+      que una aserción pueda ejercitar.
+- [x] Pruebas unitarias de `Email` (`EmailTest`, 9 tests) — cubren `§15.1` #17-24 (normalización,
+      igualdad por valor, formatos inválidos: sin `@`, sin parte local, sin dominio, vacío y null
+      como casos separados)
+- [x] Pruebas unitarias de enums (`CustomerStatusTest`, `DocumentTypeTest`) — `§15.1` #25-26
 
 ## 2. Puertos
 
